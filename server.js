@@ -2,6 +2,8 @@ var express = require('express');
 var bodyParser = require('body-parser');
 var _ = require('underscore');
 
+var db = require('./db.js');
+
 var app = express();
 var PORT = process.env.PORT || 3000;
 
@@ -10,19 +12,23 @@ var todoNextId = 1;
 
 app.use(bodyParser.json());
 
-app.get('/', function (req, res) {
+app.get('/', function(req, res) {
     res.send('Todo API Root');
 });
 
 // GET /todos?completed=true&q=house
-app.get('/todos', function (req, res) {
+app.get('/todos', function(req, res) {
     var queryParams = req.query;
     var filteredTodos = todos;
 
     if (queryParams.hasOwnProperty('completed') && queryParams.completed === 'true') {
-        filteredTodos = _.where(todos, {completed: true});
+        filteredTodos = _.where(todos, {
+            completed: true
+        });
     } else if (queryParams.hasOwnProperty('completed') && queryParams.completed === 'false') {
-        filteredTodos = _.where(todos, {completed: false});
+        filteredTodos = _.where(todos, {
+            completed: false
+        });
     }
 
     // q need to be there and it needs to be > 0
@@ -30,7 +36,7 @@ app.get('/todos', function (req, res) {
     // for the filter criteria, use indexOf('sometext'). if
     // you get something other than -1, the text is in the string
     if (queryParams.hasOwnProperty('q') && queryParams.q.length > 0) {
-        filteredTodos = _.filter(filteredTodos, function (obj) {
+        filteredTodos = _.filter(filteredTodos, function(obj) {
             return obj.description.toLowerCase().indexOf(queryParams.q.toLowerCase()) != -1;
         });
     }
@@ -38,9 +44,11 @@ app.get('/todos', function (req, res) {
     res.json(filteredTodos);
 });
 
-app.get('/todos/:id', function (req, res) {
+app.get('/todos/:id', function(req, res) {
     var todoId = parseInt(req.params.id, 10);
-    var match = _.findWhere(todos, {id: todoId});
+    var match = _.findWhere(todos, {
+        id: todoId
+    });
 
     if (match) {
         res.json(match);
@@ -50,41 +58,55 @@ app.get('/todos/:id', function (req, res) {
 
 });
 
-// POST /todos but data in JSON/string form is sent
-app.post('/todos', function (req, res) {
-    // var body = req.body;
+// POST /todos
+app.post('/todos', function(req, res) {
     var body = _.pick(req.body, 'description', 'completed');
 
-    if (!_.isBoolean(body.completed) || !_.isString(body.description) || body.description.trim().length === 0) {
-        return res.status(400).send();
-    }
+    //call create on db.todo
+    //  respond with 200 and todo
+    //  if error, res.status(400).json(e)
+    db.todo.create(body).then(function (todo) {
+        res.json(todo.toJSON());
+    }, function (e) {
+        res.status(400).json(e);
+    });
 
-    body.description = body.description.trim();
+    // if (!_.isBoolean(body.completed) || !_.isString(body.description) || body.description.trim().length === 0) {
+    //     return res.status(400).send();
+    // }
 
-    body.id = todoNextId;
-    todos.push(body);
-    todoNextId++;
+    // body.description = body.description.trim();
 
-    res.json(body);
+    // body.id = todoNextId;
+    // todos.push(body);
+    // todoNextId++;
+
+    // res.json(body);
 });
 
 // DELETE /todos/:id
-app.delete('/todos/:id', function (req, res) {
+app.delete('/todos/:id', function(req, res) {
     var todoId = parseInt(req.params.id, 10);
-    var match = _.findWhere(todos, {id: todoId});
+    var match = _.findWhere(todos, {
+        id: todoId
+    });
 
     if (match) {
         todos = _.without(todos, match);
         res.json(match);
     } else {
-        res.status(404).json({"error": "no todo with id" + todoId});
+        res.status(404).json({
+            "error": "no todo with id" + todoId
+        });
     }
 });
 
 // PUT /todos/:id
-app.put('/todos/:id', function (req, res) {
+app.put('/todos/:id', function(req, res) {
     var todoId = parseInt(req.params.id, 10);
-    var match = _.findWhere(todos, {id: todoId});
+    var match = _.findWhere(todos, {
+        id: todoId
+    });
     if (!match) {
         return res.status(404).send();
     }
@@ -110,6 +132,8 @@ app.put('/todos/:id', function (req, res) {
 
 });
 
-app.listen(PORT, function () {
-    console.log("Express listening on PORT " + PORT);
+db.sequelize.sync().then(function() {
+    app.listen(PORT, function() {
+        console.log("Express listening on PORT " + PORT);
+    });
 });
